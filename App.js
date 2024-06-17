@@ -6,7 +6,7 @@ import { MaterialCommunityIcons, Feather, Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import Home from './src/Screens/Home';
-import Explorepage from './src/Screens/Explorepage';
+import Explorepage from './src/Screens/ExplorePage';
 import Camera from './src/Screens/Camera';
 import SignIn from './src/Screens/SignIn';
 import SignUp from './src/Screens/SignUp';
