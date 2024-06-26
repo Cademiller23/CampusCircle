@@ -1,4 +1,6 @@
 import React, { useState, useRef } from "react";
+import base64 from 'react-native-base64';
+
 import {
   View,
   Text,
@@ -8,10 +10,15 @@ import {
   TouchableOpacity,
   TextInput,
   Button,
+  ScrollView,
+  Alert, Image
 } from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
-import Modal from "react-native-modal";
+import Modal from "react-native-modal"; // Use react-native-modal for additional features
+
 import { Video } from "expo-av";
+import { useFocusEffect } from "@react-navigation/native";
+import Loading from "../Components/Loading";
 
 const initialData = [
   {
@@ -42,11 +49,72 @@ const initialData = [
 const ExplorePage = () => {
   const [data, setData] = useState(initialData);
   const [votes, setVotes] = useState({});
+  const [posts, setPosts] = useState([]);
   const [isModalVisible, setModalVisible] = useState(false);
   const [selectedPost, setSelectedPost] = useState(null);
   const [newComment, setNewComment] = useState("");
-  const commentListRef = useRef(null);
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState(null);
+  const [loading, setIsLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasNextPage, setHasNextPage] = useState(false);
 
+
+  const commentListRef = useRef(null);
+  /*
+    const [comments, setComments] = useState([]);
+    function CommentSection(post_id) {
+        const response = await fetch('http://-----:5000/comments/${post_id}')
+        const data = response.json();
+    
+
+    }
+    function upVotePost(post_id) {
+        
+    }
+
+  */
+ useFocusEffect(
+  React.useCallback(() => {
+    fetchPosts(); // Fetch posts again whe the screen gets focus
+
+  }, [selectedCategoryFilter, currentPage]) // Fetch also when filter changes
+
+ );
+ const fetchPosts = async () => {
+  try {
+    setIsLoading(true); // Show Loading Indicator
+    const categoryQuery = selectedCategoryFilter === "all" ? "" : selectedCategoryFilter;
+    const response = await fetch(`http://127.0.0.1:5000/explore_posts?page=${currentPage}&per_page=10&category=${categoryQuery}`);
+    
+
+    if(response.ok) {
+      const data = await response.json();
+      
+      // Ensure posts from the same user are not shown sequentially
+      const shuffledPosts = shuffleArray(data.posts); // Shuffle posts
+
+      setPosts(currentPage === 1 ? shuffledPosts : [...posts, ...shuffledPosts]);
+      setHasNextPage(data.has_next);
+
+    } else {
+      throw new Error('No Posts error fetching posts');
+    }
+  } catch (error) {
+    Alert.alert('Error', 'An error occured while fetching posts.')
+    console.error(error);
+
+  } finally {
+    setIsLoading(false);
+  }
+ }
+ // Fisher-Yates Shuffle (to randomize posts)
+ const shuffleArray = (array) => {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+ };
   const processTime = (timeStamp) => {
     if (timeStamp >= 60) {
       if (timeStamp / 60 === 1) {
@@ -137,13 +205,13 @@ const ExplorePage = () => {
 
   const renderItem = ({ item }) => {
     const voteStatus = votes[item.id];
+    const base64Image = `data:${item.content_type};base64,${item.content_url}`
     return (
       <View style={styles.postContainer}>
-        <Video
-          source={{ uri: item.videoUri }}
+        <Image
+          source={{ uri: base64Image }}
           style={styles.video}
           resizeMode="cover"
-          useNativeControls
         />
         <Text style={styles.title}>{item.title}</Text>
         <Text style={styles.username}>@{item.username}</Text>
@@ -153,6 +221,7 @@ const ExplorePage = () => {
             style={styles.voteButton}
             onPress={() => handleVote(item.id, "upvote")}
           >
+            {/* On Press go to function */}
             <Icon
               name="arrow-up"
               size={24}
@@ -180,11 +249,32 @@ const ExplorePage = () => {
       </View>
     );
   };
+  const handleCategoryFilterPress = (category) => {
+    setSelectedCategoryFilter(category);
+  };
+  const handleLoadMore = () => {
+    if(hasNextPage) {
+      setCurrentPage(currentPage + 1);
+      fetchPosts();
+    }
+  }
 
   return (
     <View style={{ flex: 1 }}>
+      {/* Category Filter Buttons - Same as in CameraStyling */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
+        {['frat', 'laughs', 'education', 'all'].map(category => (
+          <TouchableOpacity
+          key={category}
+          onPress={() => handleCategoryFilterPress(category)}
+          style={[styles.categoryButton, selectedCategoryFilter === category && styles.selectedCategoryButton]}
+        >
+          <Text style={styles.categoryButtonText}>{category}</Text>
+        </TouchableOpacity>
+          ))}
+      </ScrollView>
       <FlatList
-        data={data}
+        data={posts}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         pagingEnabled
@@ -192,7 +282,7 @@ const ExplorePage = () => {
         snapToAlignment="start"
         decelerationRate="fast"
       />
-
+        {/* Model sends a onPress to CommentSection*/}
       <Modal
         isVisible={isModalVisible}
         onBackdropPress={() => setModalVisible(false)}
@@ -227,6 +317,23 @@ const ExplorePage = () => {
 };
 
 const styles = StyleSheet.create({
+  categoryScroll: {
+    marginBottom: 10,
+  },
+  categoryButton: {
+    backgroundColor: '#333',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginRight: 10,
+  },
+  selectedCategoryButton: {
+    backgroundColor: '#007AFF',
+  },
+  categoryButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
   postContainer: {
     height: Dimensions.get("window").height,
     justifyContent: "center",
